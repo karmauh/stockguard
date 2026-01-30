@@ -42,7 +42,7 @@ StockGuard AI is a sophisticated web application designed to help investors iden
     ```bash
     # Windows
     py -m venv .venv
-    .\.venv\Scripts\activate
+    \.venv\Scripts\activate
 
     # Mac/Linux
     python3 -m venv .venv
