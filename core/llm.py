@@ -1,0 +1,96 @@
+from abc import ABC, abstractmethod
+import pandas as pd
+from typing import Dict, Any
+from core.strategy import evaluate_market_condition
+
+class LLMProvider(ABC):
+    @abstractmethod
+    def generate_analysis(self, ticker: str, anomalies_df: pd.DataFrame, latest_data: pd.Series, language: str = 'en') -> Dict[str, Any]:
+        """
+        Generates a natural language explanation and structured signals.
+        Returns dict: {'text': str, 'sentiment': str, 'action': str}
+        """
+        pass
+
+class MockLLM(LLMProvider):
+    def generate_analysis(self, ticker: str, anomalies_df: pd.DataFrame, latest_data: pd.Series, language: str = 'en') -> Dict[str, Any]:
+        """
+        Mock implementation with heuristic, algorithmic market assessment and localization.
+        """
+        # Re-use pre-calculated signals if available, else recalculate
+        if 'sentiment' in latest_data and 'action' in latest_data:
+            sentiment = latest_data['sentiment']
+            action = latest_data['action']
+        else:
+            sentiment, action = evaluate_market_condition(latest_data)
+
+        # Gather context
+        rsi = latest_data.get('rsi', 50)
+        macd = latest_data.get('macd', 0)
+        price = latest_data.get('close', 0)
+        ma_50 = latest_data.get('ma_50', price)
+        adx = latest_data.get('adx', 0)
+        count = len(anomalies_df)
+        dates = anomalies_df['date'].astype(str).tolist() if count > 0 else []
+        recent_date = str(latest_data['date']).split()[0]
+        
+        # --- LOCALIZATION ---
+        
+        if language == 'pl':
+            # Polish Translation
+            verdict_map = {"BULLISH": "WZROSTOWY (BULLISH)", "BEARISH": "SPADKOWY (BEARISH)", "NEUTRAL": "NEUTRALNY"}
+            action_map = {"BUY": "KUPUJ", "SELL": "SPRZEDAWAJ", "HOLD": "TRZYMAJ"}
+            
+            sent_str = verdict_map.get(sentiment, sentiment)
+            act_str = action_map.get(action, action)
+            
+            trend_desc = "powyżej" if price > ma_50 else "poniżej"
+            trend_sent = "pozytywny" if price > ma_50 else "negatywny"
+            
+            rsi_desc = "Wyprzedanie (<30)" if rsi < 30 else "Wykupienie (>70)" if rsi > 70 else "Obszar neutralny"
+            macd_desc = "dodatni" if macd > 0 else "ujemny"
+            macd_press = "kupna" if macd > 0 else "sprzedaży"
+            adx_desc = "silny" if adx > 25 else "słaby"
+            
+            anom_desc = f"Wykryto {count} anomalii w analizowanym okresie."
+            if count > 0:
+                anom_desc += f" Ostatnie anomalie wystąpiły w okolicach: {', '.join(dates[:3])}."
+            else:
+                anom_desc += " Zmienność pozostaje w normie."
+
+            text = (
+                f"**Algorytmiczna Ocena Rynku dla {ticker} ({recent_date})**\n\n"
+                f"**Werdykt**: **{sent_str}** | **Rekomendacja**: **{act_str}**\n\n"
+                "**Kontekst Rynkowy**:\n"
+                f"- **Trend**: Cena znajduje się {trend_desc} 50-dniowej Średniej Kroczącej, co wskazuje na trend {trend_sent}.\n"
+                f"- **Momentum**: RSI wynosi {rsi:.1f}. Status: {rsi_desc}. "
+                f"Histogram MACD jest {macd_desc}, sugerując presję {macd_press}.\n"
+                f"- **Siła Trendu**: ADX wynosi {adx:.1f}, wskazując na {adx_desc} trend.\n\n"
+                "**Analiza Anomalii**:\n"
+                f"{anom_desc}\n"
+                "Anomalie te często pokrywają się z publikacjami wyników lub wydarzeniami makroekonomicznymi.\n\n"
+                "*(Zastrzeżenie: Analiza jest generowana automatycznie i nie stanowi porady inwestycyjnej.)*"
+            )
+            
+        else:
+            # English Default
+            text = (
+                f"**Algorithmic Market Assessment for {ticker} ({recent_date})**\n\n"
+                f"**Verdict**: **{sentiment}** | **Action**: **{action}**\n\n"
+                "**Market Context**:\n"
+                f"- **Trend**: The price is {'above' if price > ma_50 else 'below'} the 50-day Moving Average, indicating a {'positive' if price > ma_50 else 'negative'} medium-term trend.\n"
+                f"- **Momentum**: RSI is at {rsi:.1f}. {'Oversold (<30)' if rsi < 30 else 'Overbought (>70)' if rsi > 70 else 'Neutral range'}. "
+                f"MACD histogram is {'positive' if macd > 0 else 'negative'}, suggesting {'buying' if macd > 0 else 'selling'} pressure.\n"
+                f"- **Trend Strength**: ADX is {adx:.1f}, indicating a {'strong' if adx > 25 else 'weak'} trend.\n\n"
+                "**Anomaly Insights**:\n"
+                f"Detected {count} anomalous events in the analyzed period. "
+                f"{'Most recent anomalies occurred around: ' + ', '.join(dates[:3]) + '.' if count > 0 else 'Volatility has been within expected bounds.'}\n"
+                "These anomalies typically coincide with earnings releases or macroeconomic shifts.\n\n"
+                "*(Disclaimer: This analysis is generated by an algorithmic model and does not constitute financial advice. Always do your own research.)*"
+            )
+        
+        return {
+            "text": text,
+            "sentiment": sentiment,
+            "action": action
+        }
